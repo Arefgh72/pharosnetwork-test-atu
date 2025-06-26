@@ -1,0 +1,102 @@
+# scheduled_operations.yml
+
+name: Pharos Scheduled Operations
+
+on:
+  # این خط به شما اجازه می‌دهد که ورک‌فلو را به صورت دستی هم از طریق تب Actions در گیت‌هاب اجرا کنید (برای تست)
+  workflow_dispatch:
+
+  schedule:
+    # زمان‌بندی‌ها بر اساس ساعت UTC
+    - cron: '0 1 * * *'  # 01:00 UTC
+    - cron: '0 2 * * *'  # 02:00 UTC
+    - cron: '0 3 * * *'  # 03:00 UTC
+    - cron: '0 6 * * *'  # 06:00 UTC
+    - cron: '0 9 * * *'  # 09:00 UTC
+    - cron: '0 16 * * *' # 16:00 UTC
+    - cron: '0 18 * * *' # 18:00 UTC
+    - cron: '0 20 * * *' # 20:00 UTC
+    - cron: '0 23 * * *' # 23:00 UTC
+
+jobs:
+  run-scheduled-task:
+    runs-on: ubuntu-latest
+    
+    # دسترسی لازم برای نوشتن در ریپازیتوری (برای ذخیره فایل amounts.json)
+    permissions:
+      contents: write
+
+    steps:
+      # مرحله ۱: دریافت کد از ریپازیتوری
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          # توکن لازم برای اینکه اکشن بتواند در ریپازیتوری کامیت کند
+          token: ${{ secrets.GH_PAT }}
+
+      # مرحله ۲: نصب Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # مرحله ۳: نصب وابستگی‌ها (کتابخانه ethers)
+      - name: Install Dependencies
+        run: npm install
+
+      # مرحله ۴: اجرای تسک‌ها بر اساس زمان‌بندی
+      # در هر زمان مشخص، فقط یکی از این مراحل اجرا خواهد شد
+      
+      - name: Run Task at 01:00 UTC (Wrap 0.001 on Wrapper 2)
+        if: github.event.schedule == '0 1 * * *'
+        run: node main.js WRAP_2
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 02:00 UTC (Swap PHRS to USDC_OLD)
+        if: github.event.schedule == '0 2 * * *'
+        run: node main.js SWAP_TO_USDC_OLD
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 03:00 UTC (Wrap 0.01 on Wrapper 1)
+        if: github.event.schedule == '0 3 * * *'
+        run: node main.js WRAP_1
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 06:00 UTC (Swap PHRS to Tether USD)
+        if: github.event.schedule == '0 6 * * *'
+        run: node main.js SWAP_TO_TETHER
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+          
+      - name: Run Task at 09:00 UTC (Swap Tether to USDC)
+        if: github.event.schedule == '0 9 * * *'
+        run: node main.js SWAP_TETHER_TO_USDC
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 16:00 UTC (Swap USDC_OLD to PHRS)
+        if: github.event.schedule == '0 16 * * *'
+        run: node main.js SWAP_USDC_OLD_TO_PHRS
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 18:00 UTC (Swap USDC to PHRS - 2 Steps)
+        if: github.event.schedule == '0 18 * * *'
+        run: node main.js SWAP_USDC_TO_PHRS
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 20:00 UTC (Unwrap 0.001 from Wrapper 2)
+        if: github.event.schedule == '0 20 * * *'
+        run: node main.js UNWRAP_2
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
+
+      - name: Run Task at 23:00 UTC (Unwrap 0.01 from Wrapper 1)
+        if: github.event.schedule == '0 23 * * *'
+        run: node main.js UNWRAP_1
+        env:
+          PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
