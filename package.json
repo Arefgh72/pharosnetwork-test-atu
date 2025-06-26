@@ -1,0 +1,14 @@
+{
+  "name": "pharos-automation-script",
+  "version": "1.0.0",
+  "description": "اسکریپت برای انجام عملیات خودکار در شبکه فاروس",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ethers": "^5.7.2"
+  }
+}
