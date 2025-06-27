@@ -1,4 +1,4 @@
-// main.js (نسخه ۸ - نهایی و کامل)
+// main.js (نسخه ۹ - کامل و نهایی)
 
 const { ethers } = require("ethers");
 const fs = require("fs");
@@ -43,7 +43,7 @@ function writeAndCommitAmounts(amountsToSave) {
         execSync("git push");
         console.log("✅ فایل مقادیر با موفقیت در ریپازیتوری آپدیت شد.");
     } catch (error) {
-        console.error("خطا در هنگام commit کردن فایل.", error.stdout?.toString());
+        console.error("خطا در هنگام commit کردن فایل:", error.message.split('\n')[0]);
     }
 }
 async function sendAndConfirmTransaction(txRequest, description) {
@@ -59,7 +59,7 @@ async function sendAndConfirmTransaction(txRequest, description) {
     return receipt;
 }
 
-// --- تابع اصلی اجرای تسک‌ها (با منطق نهایی) ---
+// --- تابع اصلی اجرای تسک‌ها ---
 async function runTask(taskName) {
     console.log(`\n--- شروع عملیات: ${taskName} ---`);
     await checkBalance();
@@ -76,26 +76,7 @@ async function runTask(taskName) {
     const tetherToken = new ethers.Contract(config.ADDRESSES.TETHER_USD, config.ABIS.ERC20, wallet);
     const usdcToken = new ethers.Contract(config.ADDRESSES.USDC, config.ABIS.ERC20, wallet);
 
-    // This is the correct multicall payload structure for PHRS -> Token on DEX 1
-    const buildEthToTokenPayload = () => {
-        return [
-            // This is a placeholder for the actual swap logic which seems to be handled internally by multicall
-            // Based on the successful transaction, even an empty call or a simple call is enough
-            dex1Router.interface.encodeFunctionData("refundETH")
-        ];
-    };
-    
-    // This is the correct multicall payload for Token -> PHRS on DEX 1
-    const buildTokenToEthPayload = (tokenAddress, amount) => {
-        return [
-             dex1Router.interface.encodeFunctionData("sweepToken", [tokenAddress, amount, wallet.address]),
-             dex1Router.interface.encodeFunctionData("unwrapWETH9", [0, wallet.address])
-        ];
-    };
-
-
     switch (taskName) {
-        // --- Standard Tasks ---
         case "WRAP_2":
             await sendAndConfirmTransaction({ to: wrapper2.address, data: wrapper2.interface.encodeFunctionData("deposit"), value: ethers.utils.parseEther("0.001"), ...options }, "Wrap 0.001 PHRS on Wrapper 2");
             break;
@@ -108,17 +89,15 @@ async function runTask(taskName) {
         case "UNWRAP_1":
             await sendAndConfirmTransaction({ to: wrapper1.address, data: wrapper1.interface.encodeFunctionData("withdraw", [ethers.utils.parseEther("0.01")]), ...options }, "Unwrap 0.01 from Wrapper 1");
             break;
-
-        // --- DEX 1 Swaps (using Multicall) ---
         case "SWAP_TO_USDC_OLD": {
-            const dataPayload = buildEthToTokenPayload();
+            const dataPayload = [dex1Router.interface.encodeFunctionData("refundETH")];
             await sendAndConfirmTransaction({ to: dex1Router.address, data: dex1Router.interface.encodeFunctionData("multicall", [deadline, dataPayload]), value: ethers.utils.parseEther("0.001"), ...options }, "Swap PHRS to USDC_OLD via multicall");
             amounts.USDC_OLD_amount = (await usdcOldToken.balanceOf(wallet.address)).toString();
             writeAndCommitAmounts(amounts);
             break;
         }
         case "SWAP_TO_TETHER": {
-            const dataPayload = buildEthToTokenPayload();
+            const dataPayload = [dex1Router.interface.encodeFunctionData("refundETH")];
             await sendAndConfirmTransaction({ to: dex1Router.address, data: dex1Router.interface.encodeFunctionData("multicall", [deadline, dataPayload]), value: ethers.utils.parseEther("0.001"), ...options }, "Swap PHRS to Tether USD via multicall");
             amounts.TETHER_USD_amount = (await tetherToken.balanceOf(wallet.address)).toString();
             writeAndCommitAmounts(amounts);
@@ -128,12 +107,13 @@ async function runTask(taskName) {
             const usdcAmount = amounts.USDC_amount;
             if (!usdcAmount || usdcAmount === "0") throw new Error("مقدار USDC برای سواپ یافت نشد.");
             await sendAndConfirmTransaction({ to: usdcToken.address, data: usdcToken.interface.encodeFunctionData("approve", [dex1Router.address, usdcAmount]), ...options }, "Approve USDC for DEX 1");
-            const dataPayload = buildTokenToEthPayload(config.ADDRESSES.USDC, usdcAmount);
+            const dataPayload = [
+                dex1Router.interface.encodeFunctionData("sweepToken", [config.ADDRESSES.USDC, usdcAmount, wallet.address]),
+                dex1Router.interface.encodeFunctionData("unwrapWETH9", [0, wallet.address])
+            ];
             await sendAndConfirmTransaction({ to: dex1Router.address, data: dex1Router.interface.encodeFunctionData("multicall", [deadline, dataPayload]), ...options }, "Swap USDC to PHRS via multicall");
             break;
         }
-        
-        // --- DEX 2 Swaps (Standard Router) ---
         case "SWAP_TETHER_TO_USDC": {
             const tetherAmount = amounts.TETHER_USD_amount;
             if (!tetherAmount || tetherAmount === "0") throw new Error("مقدار تتر برای سواپ یافت نشد.");
@@ -150,8 +130,6 @@ async function runTask(taskName) {
             await sendAndConfirmTransaction({ to: dex2Router.address, data: dex2Router.interface.encodeFunctionData("swapExactTokensForETH", [usdcOldAmount, 0, [config.ADDRESSES.USDC_OLD, config.ADDRESSES.WRAPPER_1], wallet.address, deadline]), ...options }, "Swap USDC_OLD to PHRS");
             break;
         }
-
-        // --- Test Task ---
         case "TEST_ALL":
             console.log("!!! شروع تست کامل تمام مراحل !!!");
             await runTask("WRAP_2");
