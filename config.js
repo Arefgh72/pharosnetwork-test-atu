@@ -1,4 +1,4 @@
-// config.js (نسخه ۲ - اصلاح شده)
+// config.js (نسخه ۴ - نهایی)
 
 const config = {
     RPC_URL: "https://testnet.dplabs-internal.com",
@@ -23,21 +23,21 @@ const config = {
         ],
         ERC20: [
             "function approve(address spender, uint256 amount) returns (bool)",
-            "function allowance(address owner, address spender) view returns (uint256)",
             "function balanceOf(address owner) view returns (uint256)"
         ],
-        // --- ABI اصلاح شده برای روترها ---
+        // ABI برای روترها با توابع صحیح
         DEX_ROUTER: [
-            // تابع استاندارد برای تبدیل توکن به توکن
-            "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
-            // تابع استاندارد برای تبدیل توکن به توکن اصلی شبکه
-            "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+            // تابع multicall برای روتر دکس ۱
+            "function multicall(uint256 deadline, bytes[] calldata data) external payable",
             
-            // !! تابع سفارشی برای روتر ۱ که از داده تراکنش شما استخراج شد !!
-            "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-
-            // !! تابع سفارشی برای روتر ۲ (بر اساس داده‌های تراکنش شما) !!
-            "function swapExactTokensForTokensSupportingFeeOnTransferTokens(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) external payable"
+            // توابع داخلی که در multicall استفاده می‌شوند (برای انکد کردن)
+            "function sweepToken(address token, uint256 amountMinimum, address recipient)",
+            "function unwrapWETH9(uint256 amountMinimum, address recipient)",
+            "function refundETH()",
+            
+            // توابع استاندارد برای روتر دکس ۲
+            "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+            "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
         ]
     }
 };
