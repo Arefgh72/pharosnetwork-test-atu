@@ -1,10 +1,28 @@
-# manual-test-run.yml
+# manual-test-run.yml (نسخه ۲ - با قابلیت انتخاب تسک)
 
 name: Manual Test Run
 
-# این ورک‌فلو فقط به صورت دستی فعال می‌شود
 on:
   workflow_dispatch:
+    # --- بخش جدید: تعریف ورودی‌ها ---
+    # این بخش یک منوی کشویی در صفحه اجرای دستی اکشن ایجاد می‌کند
+    inputs:
+      task_to_run:
+        description: 'Which task to run?'
+        required: true
+        type: choice
+        default: 'TEST_ALL'
+        options: 
+          - TEST_ALL
+          - WRAP_2
+          - SWAP_TO_USDC_OLD
+          - WRAP_1
+          - SWAP_TO_TETHER
+          - SWAP_TETHER_TO_USDC
+          - SWAP_USDC_OLD_TO_PHRS
+          - SWAP_USDC_TO_PHRS
+          - UNWRAP_2
+          - UNWRAP_1
 
 jobs:
   run-full-test:
@@ -27,8 +45,9 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      # در اینجا، ما اسکریپت را با یک تسک جدید به نام TEST_ALL اجرا می‌کنیم
-      - name: Run Full Test Sequence
-        run: node main.js TEST_ALL
+      # --- بخش اصلاح شده: اجرای تسک بر اساس انتخاب کاربر ---
+      # اینجا از ورودی که کاربر در منوی کشویی انتخاب کرده استفاده می‌کنیم
+      - name: Run Selected Task
+        run: node main.js ${{ github.event.inputs.task_to_run }}
         env:
           PRIVATE_KEY: ${{ secrets.YOUR_PRIVATE_KEY }}
