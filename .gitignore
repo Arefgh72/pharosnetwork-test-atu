@@ -1,0 +1,10 @@
+# .gitignore
+
+# Dependencies
+/node_modules
+
+# Lockfiles
+package-lock.json
+
+# Local files
+amounts.json
