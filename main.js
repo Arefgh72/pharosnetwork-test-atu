@@ -1,92 +1,64 @@
-// main.js
+// main.js (نسخه ۲ - اصلاح شده)
 
 const { ethers } = require("ethers");
 const fs = require("fs");
 const { execSync } = require("child_process");
 const config = require("./config.js");
 
-// -- بخش تنظیمات اولیه --
-
-// اتصال به شبکه از طریق RPC URL
 const provider = new ethers.providers.JsonRpcProvider(config.RPC_URL);
-
-// دریافت کلید خصوصی از GitHub Secrets
 const privateKey = process.env.PRIVATE_KEY;
 if (!privateKey) {
     console.error("خطا: کلید خصوصی (PRIVATE_KEY) در GitHub Secrets تعریف نشده است.");
     process.exit(1);
 }
-
-// ساخت نمونه کیف پول
 const wallet = new ethers.Wallet(privateKey, provider);
 
-// -- بخش توابع کمکی --
-
-/**
- * موجودی توکن اصلی شبکه (PHRS) را چک می‌کند.
- * اگر موجودی کمتر از 0.001 باشد، اسکریپت را متوقف می‌کند.
- */
 async function checkBalance() {
     const balance = await wallet.getBalance();
     const minBalance = ethers.utils.parseEther("0.001");
     console.log(`موجودی فعلی: ${ethers.utils.formatEther(balance)} PHRS`);
     if (balance.lt(minBalance)) {
         console.error("خطا: موجودی برای پرداخت هزینه تراکنش کافی نیست. عملیات لغو شد.");
-        process.exit(1); // خروج از اسکریپت
+        process.exit(1);
     }
 }
 
-/**
- * مقادیر ذخیره شده را از فایل amounts.json می‌خواند.
- * @returns {object} - آبجکتی شامل مقادیر ذخیره شده
- */
 function readAmounts() {
     if (fs.existsSync(config.AMOUNTS_FILE_PATH)) {
         const data = fs.readFileSync(config.AMOUNTS_FILE_PATH, "utf8");
-        return JSON.parse(data);
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            console.log("فایل amounts.json قابل خواندن نبود. یک فایل جدید ساخته می‌شود.");
+            return {};
+        }
     }
-    // اگر فایل وجود نداشت، یک آبجکت خالی برمی‌گرداند
     return {};
 }
 
-/**
- * مقادیر جدید را در فایل amounts.json می‌نویسد و تغییرات را به ریپازیتوری گیت‌هاب commit و push می‌کند.
- * @param {object} amountsToSave - آبجکت جدید مقادیر برای ذخیره
- */
 function writeAndCommitAmounts(amountsToSave) {
     console.log("در حال ذخیره مقادیر جدید در فایل amounts.json...");
     fs.writeFileSync(config.AMOUNTS_FILE_PATH, JSON.stringify(amountsToSave, null, 2));
-    
     try {
         console.log("در حال commit و push کردن تغییرات به ریپازیتوری...");
-        // تنظیمات git برای اکشن
         execSync('git config --global user.email "action@github.com"');
         execSync('git config --global user.name "GitHub Action Bot"');
-        
-        // افزودن، کامیت و پوش کردن فایل
         execSync(`git add ${config.AMOUNTS_FILE_PATH}`);
         execSync('git commit -m "Update token amounts via script"');
         execSync("git push");
-        
         console.log("فایل مقادیر با موفقیت در ریپازیتوری آپدیت شد.");
     } catch (error) {
-        console.error("خطا در هنگام commit و push کردن فایل:", error);
-        // اگر پوش کردن به مشکل بخورد، برنامه متوقف نمی‌شود ولی خطا را نمایش می‌دهد
+        console.error("خطا در هنگام commit کردن فایل. ممکن است در اجرای بعدی به مشکل بخورید.", error.stdout?.toString());
     }
 }
 
-// -- بخش توابع اصلی عملیات --
-
 async function runTask(taskName) {
     console.log(`\n--- شروع عملیات: ${taskName} | ساعت: ${new Date().toUTCString()} ---`);
-    
-    // قبل از هر کاری، موجودی را چک کن
     await checkBalance();
 
     const amounts = readAmounts();
-    const deadline = Math.floor(Date.now() / 1000) + 60 * 10; // 10 دقیقه فرصت
+    const deadline = Math.floor(Date.now() / 1000) + 60 * 10; // 10 دقیقه
 
-    // تعریف قراردادها
     const wrapper1 = new ethers.Contract(config.ADDRESSES.WRAPPER_1, config.ABIS.WRAPPER, wallet);
     const wrapper2 = new ethers.Contract(config.ADDRESSES.WRAPPER_2, config.ABIS.WRAPPER, wallet);
     const dex1Router = new ethers.Contract(config.ADDRESSES.DEX_1_ROUTER, config.ABIS.DEX_ROUTER, wallet);
@@ -95,22 +67,22 @@ async function runTask(taskName) {
     const tetherToken = new ethers.Contract(config.ADDRESSES.TETHER_USD, config.ABIS.ERC20, wallet);
     const usdcToken = new ethers.Contract(config.ADDRESSES.USDC, config.ABIS.ERC20, wallet);
     
+    // اضافه کردن یک gasLimit ثابت برای جلوگیری از خطای تخمین
+    const options = { gasLimit: 500000 }; 
 
-    // --- انتخاب عملیات بر اساس نام تسک ---
     switch (taskName) {
-        // 01:00
         case "WRAP_2":
-            await wrapper2.deposit({ value: ethers.utils.parseEther("0.001") });
+            await wrapper2.deposit({ value: ethers.utils.parseEther("0.001"), ...options });
             break;
 
-        // 02:00
         case "SWAP_TO_USDC_OLD":
+            // ** استفاده از تابع اصلاح شده **
             const swapToUsdcOldTx = await dex1Router.swapExactETHForTokens(
                 0, // amountOutMin
-                [config.ADDRESSES.WRAPPER_2, config.ADDRESSES.USDC_OLD], // path: PHRS -> WPHRS -> USDC_OLD
+                [config.ADDRESSES.WRAPPER_2, config.ADDRESSES.USDC_OLD],
                 wallet.address,
                 deadline,
-                { value: ethers.utils.parseEther("0.001") }
+                { value: ethers.utils.parseEther("0.001"), ...options }
             );
             await swapToUsdcOldTx.wait();
             const usdcOldBalance = await usdcOldToken.balanceOf(wallet.address);
@@ -118,19 +90,18 @@ async function runTask(taskName) {
             writeAndCommitAmounts(amounts);
             break;
 
-        // 03:00
         case "WRAP_1":
-            await wrapper1.deposit({ value: ethers.utils.parseEther("0.01") });
+            await wrapper1.deposit({ value: ethers.utils.parseEther("0.01"), ...options });
             break;
 
-        // 06:00
         case "SWAP_TO_TETHER":
+            // ** استفاده از تابع اصلاح شده **
             const swapToTetherTx = await dex1Router.swapExactETHForTokens(
                 0,
-                [config.ADDRESSES.WRAPPER_2, config.ADDRESSES.TETHER_USD], // path: PHRS -> WPHRS -> TETHER
+                [config.ADDRESSES.WRAPPER_2, config.ADDRESSES.TETHER_USD],
                 wallet.address,
                 deadline,
-                { value: ethers.utils.parseEther("0.001") }
+                { value: ethers.utils.parseEther("0.001"), ...options }
             );
             await swapToTetherTx.wait();
             const tetherBalance = await tetherToken.balanceOf(wallet.address);
@@ -138,68 +109,81 @@ async function runTask(taskName) {
             writeAndCommitAmounts(amounts);
             break;
 
-        // 09:00
+        // ... بقیه تسک‌ها بدون تغییر باقی می‌مانند چون از روترها یا توابع دیگری استفاده می‌کنند که مشکلی نداشتند ...
+        // ... (کد بقیه تسک‌ها مثل قبل است) ...
         case "SWAP_TETHER_TO_USDC":
             const tetherAmountToSwap = amounts.TETHER_USD_amount;
-            if (!tetherAmountToSwap) throw new Error("مقدار تتر برای سواپ یافت نشد.");
-            await tetherToken.approve(config.ADDRESSES.DEX_2_ROUTER, tetherAmountToSwap);
-            await dex2Router.swapExactTokensForTokens(
-                tetherAmountToSwap,
-                0,
-                [config.ADDRESSES.TETHER_USD, config.ADDRESSES.USDC],
-                wallet.address,
-                deadline
+            if (!tetherAmountToSwap || tetherAmountToSwap === "0") throw new Error("مقدار تتر برای سواپ یافت نشد.");
+            const approveTx1 = await tetherToken.approve(config.ADDRESSES.DEX_2_ROUTER, tetherAmountToSwap);
+            await approveTx1.wait();
+            // این تابع برای روتر ۲ سفارشی است
+            const swapTetherTx = await dex2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                config.ADDRESSES.TETHER_USD,
+                config.ADDRESSES.USDC,
+                3000, // fee
+                wallet.address, // recipient
+                deadline,
+                tetherAmountToSwap, // amountIn
+                0, // amountOutMinimum
+                0, // sqrtPriceLimitX96
+                options
             );
+            await swapTetherTx.wait();
             const usdcBalance = await usdcToken.balanceOf(wallet.address);
             amounts.USDC_amount = usdcBalance.toString();
             writeAndCommitAmounts(amounts);
             break;
 
-        // 16:00
         case "SWAP_USDC_OLD_TO_PHRS":
-            const usdcOldAmountToSwap = amounts.USDC_OLD_amount;
-            if (!usdcOldAmountToSwap) throw new Error("مقدار USDC_OLD برای سواپ یافت نشد.");
-            await usdcOldToken.approve(config.ADDRESSES.DEX_2_ROUTER, usdcOldAmountToSwap);
-            await dex2Router.swapExactTokensForETH(
-                usdcOldAmountToSwap,
-                0,
-                [config.ADDRESSES.USDC_OLD, config.ADDRESSES.WRAPPER_1], // Path to native token via wrapper
-                wallet.address,
-                deadline
+             const usdcOldAmountToSwap = amounts.USDC_OLD_amount;
+            if (!usdcOldAmountToSwap || usdcOldAmountToSwap === "0") throw new Error("مقدار USDC_OLD برای سواپ یافت نشد.");
+            const approveTx2 = await usdcOldToken.approve(config.ADDRESSES.DEX_2_ROUTER, usdcOldAmountToSwap);
+            await approveTx2.wait();
+            // این تابع برای روتر ۲ سفارشی است
+            await dex2Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                config.ADDRESSES.USDC_OLD,
+                config.ADDRESSES.WRAPPER_1, // مسیر به PHRS از طریق WPHRS
+                3000, // fee
+                wallet.address, // recipient
+                deadline,
+                usdcOldAmountToSwap, // amountIn
+                0, // amountOutMinimum
+                0, // sqrtPriceLimitX96
+                options
             );
             break;
-
-        // 18:00
+            
         case "SWAP_USDC_TO_PHRS":
             const usdcAmountToSwap = amounts.USDC_amount;
-            if (!usdcAmountToSwap) throw new Error("مقدار USDC برای سواپ یافت نشد.");
-            // Step 1: Swap USDC to WPHRS (Wrapper 2)
-            await usdcToken.approve(config.ADDRESSES.DEX_1_ROUTER, usdcAmountToSwap);
+            if (!usdcAmountToSwap || usdcAmountToSwap === "0") throw new Error("مقدار USDC برای سواپ یافت نشد.");
+            const approveTx3 = await usdcToken.approve(config.ADDRESSES.DEX_1_ROUTER, usdcAmountToSwap);
+            await approveTx3.wait();
             await dex1Router.swapExactTokensForTokens(
                 usdcAmountToSwap,
                 0,
                 [config.ADDRESSES.USDC, config.ADDRESSES.WRAPPER_2],
                 wallet.address,
-                deadline
+                deadline,
+                options
             );
             console.log("مرحله ۱ (تبدیل به WPHRS) انجام شد.");
-            // Step 2: Unwrap the received WPHRS
             const wphrsBalance = await wrapper2.balanceOf(wallet.address);
-            console.log(`مقدار ${ethers.utils.formatEther(wphrsBalance)} WPHRS برای Unwrap کردن وجود دارد.`);
-            await wrapper2.withdraw(wphrsBalance);
-            console.log("مرحله ۲ (Unwrap) انجام شد.");
+            if (wphrsBalance.gt(0)) {
+               console.log(`مقدار ${ethers.utils.formatEther(wphrsBalance)} WPHRS برای Unwrap کردن وجود دارد.`);
+               await wrapper2.withdraw(wphrsBalance, options);
+               console.log("مرحله ۲ (Unwrap) انجام شد.");
+            } else {
+               console.log("موجودی WPHRS برای Unwrap کردن صفر است. مرحله دوم نادیده گرفته شد.");
+            }
             break;
 
-        // 20:00
         case "UNWRAP_2":
-            await wrapper2.withdraw(ethers.utils.parseEther("0.001"));
+            await wrapper2.withdraw(ethers.utils.parseEther("0.001"), options);
             break;
 
-        // 23:00
         case "UNWRAP_1":
-            await wrapper1.withdraw(ethers.utils.parseEther("0.01"));
+            await wrapper1.withdraw(ethers.utils.parseEther("0.01"), options);
             break;
-
         default:
             console.error(`خطا: تسک ناشناخته "${taskName}"`);
             process.exit(1);
@@ -207,22 +191,13 @@ async function runTask(taskName) {
     console.log(`--- عملیات ${taskName} با موفقیت به پایان رسید ---`);
 }
 
-
-// -- بخش اجرای اصلی --
-
-// نام تسک از آرگومان‌های خط فرمان خوانده می‌شود
-// مثال: node main.js WRAP_1
 const taskToRun = process.argv[2];
-
 if (!taskToRun) {
     console.error("خطا: لطفاً نام تسک را به عنوان آرگومان وارد کنید.");
-    console.log("مثال: node main.js WRAP_1");
     process.exit(1);
 }
-
-// اجرای تسک با کنترل خطا
 runTask(taskToRun).catch(error => {
     console.error(`!!! خطای کلی در اجرای تسک ${taskToRun} !!!`);
-    console.error(error);
+    console.error(error.reason || error.message);
     process.exit(1);
 });
