@@ -1,17 +1,10 @@
-// config.js
-
-// در این فایل، تمام آدرس‌ها، نام‌ها و ABI های لازم برای پروژه را به صورت متمرکز نگهداری می‌کنیم.
-// این کار باعث می‌شود اسکریپت اصلی تمیزتر و خواناتر باشد.
+// config.js (نسخه ۲ - اصلاح شده)
 
 const config = {
-    // اطلاعات شبکه
     RPC_URL: "https://testnet.dplabs-internal.com",
     CHAIN_ID: 688688,
-
-    // نام فایل برای ذخیره مقادیر
     AMOUNTS_FILE_PATH: "./amounts.json",
 
-    // آدرس‌های قراردادها و توکن‌ها
     ADDRESSES: {
         WRAPPER_1: "0x3019B247381c850ab53Dc0EE53bCe7A07Ea9155f",
         WRAPPER_2: "0x76aaaDA469D23216bE5f7C596fA25F282Ff9b364",
@@ -22,35 +15,31 @@ const config = {
         USDC: "0x72df0bcd7276f2dfbac900d1ce63c272c4bccced",
     },
 
-    // ABI ها (Application Binary Interface) - ساختار توابع قراردادهای هوشمند
     ABIS: {
-        // ABI برای قراردادهای Wrapper (WPHRS)
         WRAPPER: [
             "function deposit() payable",
             "function withdraw(uint256 amount)",
             "function balanceOf(address owner) view returns (uint256)"
         ],
-
-        // ABI استاندارد برای توکن‌های ERC20
         ERC20: [
             "function approve(address spender, uint256 amount) returns (bool)",
             "function allowance(address owner, address spender) view returns (uint256)",
             "function balanceOf(address owner) view returns (uint256)"
         ],
-
-        // ABI برای روترهای DEX (شامل توابع رایج سواپ)
+        // --- ABI اصلاح شده برای روترها ---
         DEX_ROUTER: [
-            // تابع برای تبدیل توکن اصلی شبکه به توکن
-            "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
-            
-            // تابع برای تبدیل توکن به توکن اصلی شبکه
+            // تابع استاندارد برای تبدیل توکن به توکن
+            "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+            // تابع استاندارد برای تبدیل توکن به توکن اصلی شبکه
             "function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)",
+            
+            // !! تابع سفارشی برای روتر ۱ که از داده تراکنش شما استخراج شد !!
+            "function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)",
 
-            // تابع برای تبدیل توکن به توکن دیگر
-            "function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)"
+            // !! تابع سفارشی برای روتر ۲ (بر اساس داده‌های تراکنش شما) !!
+            "function swapExactTokensForTokensSupportingFeeOnTransferTokens(address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96) external payable"
         ]
     }
 };
 
-// ماژول را اکسپورت می‌کنیم تا در فایل main.js قابل استفاده باشد
 module.exports = config;
