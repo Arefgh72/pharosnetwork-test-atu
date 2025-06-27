@@ -5,6 +5,3 @@
 
 # Lockfiles
 package-lock.json
-
-# Local files
-amounts.json
