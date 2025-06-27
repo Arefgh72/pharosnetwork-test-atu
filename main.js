@@ -1,4 +1,4 @@
-// main.js (نسخه ۱۳ - اصلاح نهایی گیرنده توکن)
+// main.js (نسخه ۱۴ - کامل و نهایی با استفاده از روتر ۲)
 
 const { ethers } = require("ethers");
 const fs = require("fs");
@@ -83,7 +83,6 @@ async function runTask(taskName) {
     const usdcToken = new ethers.Contract(config.ADDRESSES.USDC, config.ABIS.ERC20, wallet);
 
     switch (taskName) {
-        // ... تمام کیس‌های موفق قبلی بدون تغییر ...
         case "WRAP_2":
             await sendAndConfirmTransaction({ to: wrapper2.address, data: wrapper2.interface.encodeFunctionData("deposit"), value: ethers.utils.parseEther("0.001"), ...options }, "Wrap 0.001 PHRS on Wrapper 2");
             break;
@@ -126,25 +125,28 @@ async function runTask(taskName) {
             await sendAndConfirmTransaction({ to: dex2Router.address, data: dex2Router.interface.encodeFunctionData("swapExactTokensForETH", [usdcOldAmount, 0, [config.ADDRESSES.USDC_OLD, config.ADDRESSES.WRAPPER_1], wallet.address, deadline]), ...options }, "Swap USDC_OLD to PHRS");
             break;
         }
-
-        // ******** اصلاح نهایی و کلیدی در این بخش ********
         case "SWAP_USDC_TO_PHRS": {
             const usdcAmount = amounts.USDC_amount;
             if (!usdcAmount || usdcAmount === "0") throw new Error("مقدار USDC برای سواپ یافت نشد.");
-            
-            await sendAndConfirmTransaction({ to: usdcToken.address, data: usdcToken.interface.encodeFunctionData("approve", [dex1Router.address, usdcAmount]), ...options }, "Approve USDC for DEX 1");
-            
-            // در اینجا 'گیرنده' توکن خود روتر است تا بتواند از آن استفاده کند.
-            const dataPayload = [
-                dex1Router.interface.encodeFunctionData("sweepToken", [config.ADDRESSES.USDC, usdcAmount, dex1Router.address]), // **تغییر کلیدی**
-                dex1Router.interface.encodeFunctionData("unwrapWETH9", [0, wallet.address])
-            ];
-
-            await sendAndConfirmTransaction({ to: dex1Router.address, data: dex1Router.interface.encodeFunctionData("multicall", [deadline, dataPayload]), ...options }, "Swap USDC to PHRS via multicall");
+            console.log("ℹ️ برای این عملیات از روتر دکس ۲ استفاده می‌شود تا از موفقیت اطمینان حاصل شود.");
+            await sendAndConfirmTransaction({ 
+                to: usdcToken.address, 
+                data: usdcToken.interface.encodeFunctionData("approve", [dex2Router.address, usdcAmount]), 
+                ...options 
+            }, "Approve USDC for DEX 2");
+            await sendAndConfirmTransaction({ 
+                to: dex2Router.address, 
+                data: dex2Router.interface.encodeFunctionData("swapExactTokensForETH", [
+                    usdcAmount, 
+                    0, 
+                    [config.ADDRESSES.USDC, config.ADDRESSES.WRAPPER_2], 
+                    wallet.address, 
+                    deadline
+                ]), 
+                ...options 
+            }, "Swap USDC to PHRS via DEX 2");
             break;
         }
-
-        // --- تسک تست ---
         case "TEST_ALL":
             console.log("!!! شروع تست کامل تمام مراحل !!!");
             await runTask("WRAP_2");
